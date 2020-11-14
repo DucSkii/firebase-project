@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import './App.css';
 import { auth, db, storage } from './firebase'
 import firebase from 'firebase'
+import MultiImageInput from 'react-multiple-image-input';
 
 const App = () => {
 
@@ -13,7 +14,7 @@ const App = () => {
   const [user, setUser] = useState(null)
   const [posts, setPosts] = useState([])
   const [caption, setCaption] = useState('')
-  const [image, setImage] = useState(null)
+  const [image, setImage] = useState({})
   const [progress, setProgress] = useState(0)
 
   useEffect(() => {
@@ -61,53 +62,51 @@ const App = () => {
       .catch(error => alert(error.message))
   }
 
-  const setFile = e => {
-    if (e.target.files[0]) {
-      setImage(e.target.files[0])
-    }
-  }
-
   const handleUpload = () => {
     if (caption === '') {
       return alert('Please enter a caption')
     } else {
-      const uploadTask = storage.ref(`images/${image.name}`).put(image)
+      if (mapImages.length === 1) {
+        const uploadTask = storage.ref(`images/${mapImages[0]}`).put(image)
 
-      uploadTask.on(
-        "state_changed",
-        (snapshot) => {
-          const progress = Math.round(
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-          )
-          setProgress(progress)
-        },
-        (error) => {
-          // error func
-          console.log(error)
-        },
-        //complete func
-        () => {
-          storage
-            .ref('images')
-            .child(image.name)
-            .getDownloadURL()
-            .then(url => {
-              console.log('url', url)
-              // post image inside db
-              db.collection("posts").add({
-                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                caption: caption,
-                image: url,
-                username: user.displayName,
+        uploadTask.on(
+          "state_changed",
+          (snapshot) => {
+            const progress = Math.round(
+              (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+            )
+            setProgress(progress)
+          },
+          (error) => {
+            console.log(error)
+          },
+          () => {
+            storage
+              .ref('images')
+              .child(mapImages[0])
+              .getDownloadURL()
+              .then(url => {
+                db.collection("posts").add({
+                  timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                  caption: caption,
+                  image: url,
+                  username: user.displayName,
+                  uid: user.uid
+                })
+                setProgress(0)
+                setCaption('')
+                setImage({})
               })
-              setProgress(0)
-              setCaption('')
-              setImage([])
-            })
-        },
-      )
+          },
+        )
+      }
+
     }
   }
+
+  const mapImages = Object.keys(image).map(key => {
+    return image[key]
+  })
 
   const renderPage = () => {
     if (user) {
@@ -128,7 +127,12 @@ const App = () => {
           </div>
           <div>
             <input type='text' placeholder='enter caption...' onChange={(e) => setCaption(e.target.value)} value={caption} />
-            <input type='file' onChange={(e) => setFile(e)} />
+            <MultiImageInput
+              images={image}
+              setImages={setImage}
+              allowCrop={false}
+              cropConfig={{ minWidth: 'none' }}
+            />
             <button onClick={handleUpload}>upload</button>
             <progress value={progress} max='100' />
           </div>
